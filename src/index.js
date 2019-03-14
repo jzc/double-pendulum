@@ -12,9 +12,11 @@ const g = 9.8;
 
 const vs = `
     varying vec2 vUv;
+    uniform float uAspect;
+
     void main()	{
-        vUv = uv;
-        gl_Position = vec4( position, 1.0 );
+        vUv = vec2(uv.x, uv.y / uAspect);
+        gl_Position = vec4(position, 1.0);
     }
 `;
 
@@ -25,19 +27,40 @@ const fs = `
     float random (vec2 st) {
         return fract(
             sin(
-                dot(st.xy, vec2(12.9898,78.233))
+                dot(st.xy, vec2(12.9898,78.233))+uTime*.2
             )*43758.5453123
         );
     }
 
+    float noise (vec2 st) {
+        vec2 i = floor(st);
+        vec2 f = fract(st);
+    
+        // Four corners in 2D of a tile
+        float a = random(i);
+        float b = random(i + vec2(1.0, 0.0));
+        float c = random(i + vec2(0.0, 1.0));
+        float d = random(i + vec2(1.0, 1.0));
+    
+        // Smooth Interpolation
+    
+        // Cubic Hermine Curve.  Same as SmoothStep()
+        vec2 u = f*f*(3.0-2.000*f);
+    
+        // Mix 4 coorners percentages
+        return mix(a, b, u.x) +
+                (c - a)* u.y * (1.0 - u.x) +
+                (d - b) * u.x * u.y;
+    }
+
     void main()	{
-        float rand = random(vUv);
-        gl_FragColor = vec4(vec3(rand), 1);
+        vec2 uv = vUv;
+        gl_FragColor = vec4(vec3(noise(750.0*uv)), 1);
     }
 `;
 
-let th0 = .25*Math.PI, th1 = 0, pth0 = 0, pth1 = 0;
-let m = .01, l = .2;
+let th0 = 0.7*Math.PI, th1 = th0, pth0 = 0, pth1 = 0;
+let m = .1, l = .2;
 let f = makeDoublePendulumEqn(m, l);
 let h = .005;
 
@@ -48,7 +71,7 @@ function animate(timestamp) {
     requestAnimationFrame(animate);
     uniforms["uTime"].value = timestamp / 1000;
     
-    setAngle(th0, th1);
+    setAngle(th0, th1-th0);
     renderer.render(scene, camera);
     
     [th0, th1, pth0, pth1] = rk4Step(f, [th0, th1, pth0, pth1], h);
@@ -62,12 +85,13 @@ function init() {
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
+    uniforms = { "uTime": { value: 0.0 }, "uAspect": { value: 1.0 } };
     onWindowResize();
     window.addEventListener('resize', onWindowResize, false);
 
-    uniforms = { "uTime": { value: 0.0 } };
     let noiseMesh = new THREE.Mesh(
         new THREE.PlaneBufferGeometry(2, 2),
+        // new THREE.MeshBasicMaterial,
         new THREE.ShaderMaterial({
             uniforms: uniforms,
             vertexShader: vs,
@@ -99,12 +123,16 @@ function createMeshObj(geometry, mat) {
 }
 
 function onWindowResize() {
-    camera.left = -window.innerWidth/window.innerHeight;
-    camera.right = window.innerWidth/window.innerHeight;
+    let ratio = window.innerWidth/window.innerHeight
+    camera.left = -ratio;
+    camera.right = ratio;
+    uniforms["uAspect"].value = ratio; 
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+// Unlike th1 and th2 from the pendulum equation, th2 is the angle of the 
+// lower rod as measured from th1.
 function setAngle(th1, th2) {
     pivot1.mesh.position.set(0, 0, pz);
 
@@ -153,6 +181,8 @@ function rk4Step(f, yn, h) {
     ), 1/6));
 }
 
+// source: https://en.wikipedia.org/wiki/Double_pendulum
+// Note: th1 and th2 are angle of the the respective rod as measured from the vertical.
 function makeDoublePendulumEqn(m, l) {
     return function(x) {
         let [th1, th2, pth1, pth2] = x;
