@@ -3,7 +3,7 @@ import * as THREE from "three";
 let container;
 let camera, scene, renderer;
 let uniforms;
-let pivot1, rod1, pivot2, rod2, pivot3;
+// let pivot1, rod1, pivot2, rod2, pivot3;
 const rh = .3;
 const pz = 0;
 const rz = -.5;
@@ -27,7 +27,7 @@ const fs = `
     float random (vec2 st) {
         return fract(
             sin(
-                dot(st.xy, vec2(12.9898,78.233))+uTime*.2
+                dot(st.xy, vec2(12.9898,78.233))//+uTime*.2
             )*43758.5453123
         );
     }
@@ -54,15 +54,75 @@ const fs = `
     }
 
     void main()	{
-        vec2 uv = vUv;
-        gl_FragColor = vec4(vec3(noise(750.0*uv)), 1);
+        // vec2 uv = vUv;
+        // gl_FragColor = vec4(vec3(noise(10.0*uv)), 1);
+        gl_FragColor = vec4(1, 1, 1, 1);
     }
 `;
 
-let th0 = 0.7*Math.PI, th1 = th0, pth0 = 0, pth1 = 0;
-let m = .1, l = .2;
-let f = makeDoublePendulumEqn(m, l);
+class Pendulum {
+    constructor(rodColor, pivotColor, m, l, th0, th1) {
+        this.pivot1 = createMeshObj(new THREE.CircleBufferGeometry(0.025, 64), new THREE.MeshBasicMaterial);
+        this.pivot1.mat.color.set(pivotColor);
+        
+        this.rod1 = createMeshObj(new THREE.PlaneBufferGeometry(0.025, rh), new THREE.MeshBasicMaterial);
+        this.rod1.mat.color.set(rodColor);
+        
+        this.pivot2 = createMeshObj(new THREE.CircleBufferGeometry(0.025, 64), new THREE.MeshBasicMaterial);
+        this.pivot2.mat.color.set(pivotColor);
+        
+        this.rod2 = createMeshObj(new THREE.PlaneBufferGeometry(0.025, rh), new THREE.MeshBasicMaterial);
+        this.rod2.mat.color.set(rodColor);
+        
+        this.pivot3 = createMeshObj(new THREE.CircleBufferGeometry(0.025, 64), new THREE.MeshBasicMaterial);
+        this.pivot3.mat.color.set(pivotColor); 
+
+        this.reset(th0, th1);
+        this.f = makeDoublePendulumEqn(m, l);
+    }
+
+    reset(th0, th1) {
+        this.th0 = th0;
+        this.th1 = th1;
+        this.pth0 = 0;
+        this.pth1 = 0;
+    }
+
+    // Unlike th0 and th1 from the pendulum equation, th1 is the angle of the 
+    // lower rod as measured from th0.
+    setAngle(th0, th1) {
+        this.pivot1.mesh.position.set(0, 0, pz);
+
+        this.rod1.mesh.position.set(0, -rh/2, rz);
+        this.rod1.mesh.position.applyAxisAngle(axis, th0);
+        this.rod1.mesh.quaternion.setFromAxisAngle(axis, th0);
+        
+        this.pivot2.mesh.position.set(0, -rh, pz);
+        this.pivot2.mesh.position.applyAxisAngle(axis, th0);
+
+        this.rod2.mesh.position.set(0, -3*rh/2, rz);
+        this.rod2.mesh.position.applyAxisAngle(axis, th0);
+        this.rod2.mesh.position.sub(this.pivot2.mesh.position);
+        this.rod2.mesh.position.applyAxisAngle(axis, th1);
+        this.rod2.mesh.position.add(this.pivot2.mesh.position);
+
+        this.rod2.mesh.quaternion.setFromAxisAngle(axis, th0+th1);
+
+        this.pivot3.mesh.position.set(0, -2*rh, rz);
+        this.pivot3.mesh.position.applyAxisAngle(axis, th0);
+        this.pivot3.mesh.position.sub(this.pivot2.mesh.position);
+        this.pivot3.mesh.position.applyAxisAngle(axis, th1);
+        this.pivot3.mesh.position.add(this.pivot2.mesh.position);
+    }
+
+    step(h) {
+        [this.th0, this.th1, this.pth0, this.pth1] = rk4Step(this.f, [this.th0, this.th1, this.pth0, this.pth1], h);
+        this.setAngle(this.th0, this.th1-this.th0);
+    }
+}
+
 let h = .005;
+let pendulums = [];
 
 init();
 animate();
@@ -71,17 +131,18 @@ function animate(timestamp) {
     requestAnimationFrame(animate);
     uniforms["uTime"].value = timestamp / 1000;
     
-    setAngle(th0, th1-th0);
     renderer.render(scene, camera);
     
-    [th0, th1, pth0, pth1] = rk4Step(f, [th0, th1, pth0, pth1], h);
+    for (let p of pendulums) {
+        p.step(h);
+    }
 }
 
 function init() {
     container = document.getElementById('container');
     scene = new THREE.Scene();
     camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    renderer = new THREE.WebGLRenderer();
+    renderer = new THREE.WebGLRenderer({antialias: true});
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
 
@@ -100,20 +161,15 @@ function init() {
     );
     scene.add(noiseMesh);
 
-    pivot1 = createMeshObj(new THREE.CircleBufferGeometry(0.025, 64), new THREE.MeshBasicMaterial);
-    pivot1.mat.color.set("#3177ea");
-    
-    rod1 = createMeshObj(new THREE.PlaneBufferGeometry(0.025, rh), new THREE.MeshBasicMaterial);
-    rod1.mat.color.set("#4286f4");
-    
-    pivot2 = createMeshObj(new THREE.CircleBufferGeometry(0.025, 64), new THREE.MeshBasicMaterial);
-    pivot2.mat.color.set("#3177ea");
-    
-    rod2 = createMeshObj(new THREE.PlaneBufferGeometry(0.025, rh), new THREE.MeshBasicMaterial);
-    rod2.mat.color.set("#4286f4");
-    
-    pivot3 = createMeshObj(new THREE.CircleBufferGeometry(0.025, 64), new THREE.MeshBasicMaterial);
-    pivot3.mat.color.set("#3177ea"); 
+    for (let i = 0; i < 20; i++) {
+        let th = 0.9*Math.PI + .00001*i;
+        pendulums.push(new Pendulum("#3177ea", "#4286f4", .1, .1, th, th));
+    }
+
+    // pendulums.push(new Pendulum("#3177ea", "#4286f4", .1, .1, 0.500*Math.PI, 0.501*Math.PI));
+    // pendulums.push(new Pendulum("#3177ea", "#4286f4", .1, .1, 0.501*Math.PI, 0.502*Math.PI));
+    // pendulums.push(new Pendulum("#3177ea", "#4286f4", .1, .1, 0.502*Math.PI, 0.503*Math.PI));
+    // pendulums.push(new Pendulum("#3177ea", "#4286f4", .1, .1, 0.503*Math.PI, 0.504*Math.PI));
 }
 
 function createMeshObj(geometry, mat) {
@@ -129,33 +185,6 @@ function onWindowResize() {
     uniforms["uAspect"].value = ratio; 
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// Unlike th1 and th2 from the pendulum equation, th2 is the angle of the 
-// lower rod as measured from th1.
-function setAngle(th1, th2) {
-    pivot1.mesh.position.set(0, 0, pz);
-
-    rod1.mesh.position.set(0, -rh/2, rz);
-    rod1.mesh.position.applyAxisAngle(axis, th1);
-    rod1.mesh.quaternion.setFromAxisAngle(axis, th1);
-    
-    pivot2.mesh.position.set(0, -rh, pz);
-    pivot2.mesh.position.applyAxisAngle(axis, th1);
-
-    rod2.mesh.position.set(0, -3*rh/2, rz);
-    rod2.mesh.position.applyAxisAngle(axis, th1);
-    rod2.mesh.position.sub(pivot2.mesh.position);
-    rod2.mesh.position.applyAxisAngle(axis, th2);
-    rod2.mesh.position.add(pivot2.mesh.position);
-
-    rod2.mesh.quaternion.setFromAxisAngle(axis, th1+th2);
-
-    pivot3.mesh.position.set(0, -2*rh, rz);
-    pivot3.mesh.position.applyAxisAngle(axis, th1);
-    pivot3.mesh.position.sub(pivot2.mesh.position);
-    pivot3.mesh.position.applyAxisAngle(axis, th2);
-    pivot3.mesh.position.add(pivot2.mesh.position);
 }
 
 function vectorScale(v, c) {
