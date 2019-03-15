@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { MeshLine, MeshLineMaterial } from "three.meshline";
+import * as dat from "dat.gui";
 
 let container;
 let camera, scene, renderer;
@@ -32,25 +33,26 @@ class Pendulum {
         this.pivot3 = createMeshObj(new THREE.CircleBufferGeometry(0.025, 64), new THREE.MeshBasicMaterial);
         this.pivot3.mat.color.set(pivotColor); 
 
+        this.trajectoryGeometry = new THREE.Geometry();
+        this.trajectoryLine = new MeshLine();
         this.reset(th1, th2);
-        this.setAngle();
 
-        this.f = makeDoublePendulumEqn(m, l);
-        this.trajectory_geometry = new THREE.Geometry();
-        for (let i = 0; i < trajectory_length; i++) {
-            this.trajectory_geometry.vertices.push(this.pivot3.mesh.position);
-        }
-        this.trajectory_line = new MeshLine();
-        this.trajectory_line.setGeometry(this.trajectory_geometry, p => p);
-        this.trajectory_material = new MeshLineMaterial({
+        this.trajectoryMaterial = new MeshLineMaterial({
             color: trajectoryColor, 
             lineWidth: .005,
             transparent: true,
             opacity: .5,
         })
 
-        this.trajectory_mesh = new THREE.Mesh(this.trajectory_line.geometry, this.trajectory_material);
-        scene.add(this.trajectory_mesh);
+
+        this.updateEqn(m, l);
+
+        this.trajectoryMesh = new THREE.Mesh(this.trajectoryLine.geometry, this.trajectoryMaterial);
+        scene.add(this.trajectoryMesh);
+    }
+
+    updateEqn(m, l) {
+        this.f = makeDoublePendulumEqn(m, l);
     }
 
     reset(th1, th2) {
@@ -58,6 +60,13 @@ class Pendulum {
         this.th2 = th2;
         this.pth1 = 0;
         this.pth2 = 0;
+        this.trajectoryGeometry.vertices = [];
+        for (let i = 0; i < trajectory_length; i++) {
+            this.trajectoryGeometry.vertices.push(this.pivot3.mesh.position);
+        }
+        this.setAngle()
+        this.trajectoryLine.setGeometry(this.trajectoryGeometry, p => p);
+
     }
 
     setAngle() {
@@ -85,19 +94,69 @@ class Pendulum {
         let tr = new THREE.Vector3()
         tr.copy(this.pivot3.mesh.position);
         tr.setZ(trajectoryDepth);
-        this.trajectory_line.advance(tr);
+        this.trajectoryLine.advance(tr);
     }
 }
 
+const n = 20;
+const dth = .0001;
 let h = .005;
 let pendulums = [];
+let m = .1, l = .1;
+
+let r1 = 180*Math.random()+90, r2 = 360*Math.random();
+let rth1 = Math.round(r1), rth2 = Math.round((r1+r2) % 360);
+
+function toDegree(rad) {
+    return rad*180/Math.PI;
+}
+
+function toRadian(deg) {
+    return deg*Math.PI/180;
+}
+
+let gui = new dat.GUI();
+
+function Config() {
+    this.reset = function() {
+        for (let i = 0; i < n; i++) {
+            pendulums[i].reset(toRadian(this.th1 + dth*i), toRadian(this.th2));
+            pendulums[i].updateEqn(this.m, this.l);
+        }
+    }
+    this.randomize = function() {
+        let r1 = 180*Math.random()+90, r2 = 360*Math.random();
+        this.th1 = Math.round(r1), this.th2 = Math.round((r1+r2) % 360);
+        // Iterate over all controllers
+        for (var i in gui.__controllers) {
+            gui.__controllers[i].updateDisplay();
+        }
+
+        this.reset()
+    }
+
+    this.th1 = rth1;
+    this.th2 = rth2;
+    this.m = m;
+    this.l = l;
+}
+
+let config = new Config();
+
+window.onload = function() {
+    gui.add(config, "reset");
+    gui.add(config, "randomize");
+    gui.add(config, "th1", 0, 360, 1);
+    gui.add(config, "th2", 0, 360, 1);
+    // gui.add(config, "m", .1, 5, .1);
+    // gui.add(config, "l", .1, 5, .1);
+}
 
 init();
 animate();
 
 function animate(timestamp) {
     requestAnimationFrame(animate);
-    // uniforms["uTime"].value = timestamp / 1000;
     renderer.clear()
     
     renderer.render(scene, camera);
@@ -119,11 +178,8 @@ function init() {
     onWindowResize();
     window.addEventListener('resize', onWindowResize, false);
 
-    let n = 20;
     let color = "rainbow";
-    let r1 = Math.PI*Math.random()+Math.PI/2, r2 = 2*Math.PI*Math.random();
     for (let i = 0; i < n; i++) {
-        let th = r1 + .00001*i;
         let colors;
         let p = i/(n-1);
         if (color == "rainbow") {
@@ -143,7 +199,7 @@ function init() {
         
         pendulums.push(new Pendulum(
             ...colors,
-             .1, .1, th, th + r2, .01*i)
+            m, l, toRadian(rth1 + dth*i), toRadian(rth2), .01*i)
         );
     }
 }
