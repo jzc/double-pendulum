@@ -4,7 +4,7 @@ import { MeshLine, MeshLineMaterial } from "three.meshline";
 let container;
 let camera, scene, renderer;
 
-const rodL = .45;
+const rodL = .48;
 const pivotDepth = -1;
 const rodDepth = -2;
 const trajectoryDepth = -0.5;
@@ -156,9 +156,21 @@ function createMeshObj(geometry, mat) {
 }
 
 function onWindowResize() {
-    let ratio = window.innerWidth/window.innerHeight
-    camera.left = -ratio;
-    camera.right = ratio;
+    if (window.innerHeight > window.innerWidth) {
+        let ratio = window.innerHeight/window.innerWidth
+        camera.bottom = -ratio;
+        camera.top = ratio;
+        camera.left = -1;
+        camera.right = 1;
+
+    } else {
+        let ratio = window.innerWidth/window.innerHeight
+        camera.left = -ratio;
+        camera.right = ratio;
+        camera.bottom = -1;
+        camera.top = 1;
+    }
+
     // uniforms["uAspect"].value = ratio; 
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);

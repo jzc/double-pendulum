@@ -6,6 +6,7 @@
   "private": true,
   "scripts": {
     "build": "webpack",
+    "server": "webpack-dev-server",
     "publish": "npm run build && node publish.js"
   },
   "keywords": [],
