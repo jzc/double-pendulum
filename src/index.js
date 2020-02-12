@@ -104,8 +104,19 @@ let h = .005;
 let pendulums = [];
 let m = .1, l = .1;
 
-let r1 = 180*Math.random()+90, r2 = 360*Math.random();
-let rth1 = Math.round(r1), rth2 = Math.round((r1+r2) % 360);
+let url = new URL(window.location.href);
+let p =  url.searchParams.get("th");
+let rth1, rth2;
+console.log(p);
+if (p) {
+    p = p.split(",");
+    rth1 = parseInt(p[0]);
+    rth2 = parseInt(p[1]);
+    console.log(rth1, rth2);
+} else {
+    let r1 = 180*Math.random()+90, r2 = 360*Math.random();
+    rth1 = Math.round(r1), rth2 = Math.round((r1+r2) % 360);
+}
 
 function toDegree(rad) {
     return rad*180/Math.PI;
