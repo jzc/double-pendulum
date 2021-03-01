@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "dat.gui": "^0.7.5",
-    "three": "^0.102.1",
+    "three": "^0.125.0",
     "three.meshline": "^1.2.0"
   }
 }
